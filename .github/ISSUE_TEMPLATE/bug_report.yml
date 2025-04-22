@@ -1,0 +1,41 @@
+name: 🐞 Reporte de Bug
+description: Reportar un error o problema
+title: "[BUG] "
+labels: ["bug"]
+body:
+  - type: textarea
+    id: descripcion
+    attributes:
+      label: Descripción del Bug
+      description: Describe detalladamente qué está fallando
+    validations:
+      required: true
+  - type: textarea
+    id: pasos
+    attributes:
+      label: Pasos para Reproducir
+      description: Lista los pasos para reproducir el problema
+      value: |
+        1. 
+        2. 
+        3. 
+    validations:
+      required: true
+  - type: textarea
+    id: esperado
+    attributes:
+      label: Comportamiento Esperado
+      description: ¿Qué debería ocurrir correctamente?
+    validations:
+      required: true
+  - type: dropdown
+    id: prioridad
+    attributes:
+      label: Prioridad
+      options:
+        - Baja
+        - Media
+        - Alta
+        - Crítica
+    validations:
+      required: true 
