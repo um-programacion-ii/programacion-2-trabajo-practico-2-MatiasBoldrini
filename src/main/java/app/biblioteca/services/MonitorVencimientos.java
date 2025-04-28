@@ -1,7 +1,6 @@
 package app.biblioteca.services;
 
 import java.time.LocalDateTime;
-import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
@@ -9,83 +8,82 @@ import java.util.concurrent.TimeUnit;
 
 import app.biblioteca.models.Prestamo;
 
-/**
- * Monitor que verifica periódicamente los préstamos por vencer y envía alertas
- */
 public class MonitorVencimientos {
-
-    private SistemaPrestamos sistemaPrestamos;
-    private ServicioNotificacionManager notificacionManager;
+    private final SistemaPrestamos sistemaPrestamos;
+    private final ServicioNotificacionManager notificacionManager;
     private ScheduledExecutorService scheduler;
-    private boolean ejecutando;
+    private static final int PERIODO_REVISION_HORAS = 24; // Revisar cada 24 horas
 
-    public MonitorVencimientos(SistemaPrestamos sistemaPrestamos,
-            ServicioNotificacionManager notificacionManager) {
+    public MonitorVencimientos(SistemaPrestamos sistemaPrestamos, ServicioNotificacionManager notificacionManager) {
         this.sistemaPrestamos = sistemaPrestamos;
         this.notificacionManager = notificacionManager;
         this.scheduler = Executors.newScheduledThreadPool(1);
-        this.ejecutando = false;
     }
 
-    /**
-     * Inicia el monitor de vencimientos
-     */
     public void iniciar() {
-        if (!ejecutando) {
-            ejecutando = true;
+        scheduler.scheduleAtFixedRate(
+                this::revisarVencimientos,
+                0, // Iniciar inmediatamente
+                PERIODO_REVISION_HORAS,
+                TimeUnit.HOURS);
 
-            // Programar la verificación cada 30 segundos (para demostración)
-            // En un sistema real podría ser diario
-            scheduler.scheduleAtFixedRate(this::verificarVencimientos, 5, 30, TimeUnit.SECONDS);
-
-            System.out.println("Monitor de vencimientos iniciado");
-        }
+        System.out.println("Monitor de vencimientos iniciado. Revisará cada " + PERIODO_REVISION_HORAS + " horas.");
     }
 
-    /**
-     * Detiene el monitor de vencimientos
-     */
-    public void detener() {
-        if (ejecutando) {
-            ejecutando = false;
-            scheduler.shutdown();
-
-            System.out.println("Monitor de vencimientos detenido");
-        }
-    }
-
-    /**
-     * Verifica los préstamos que están por vencer y envía alertas
-     */
-    private void verificarVencimientos() {
+    private void revisarVencimientos() {
         try {
-            System.out.println("\n==== Verificando préstamos por vencer ====");
+            System.out.println("Revisando vencimientos de préstamos...");
 
-            // Obtener préstamos por vencer en los próximos 3 días
-            List<Prestamo> prestamosPorVencer = sistemaPrestamos.obtenerPrestamosPorVencer(3);
+            // Obtener todos los préstamos activos
+            List<Prestamo> prestamosActivos = sistemaPrestamos.listarPrestamosActivos();
 
-            for (Prestamo prestamo : prestamosPorVencer) {
-                // Calcular días restantes hasta vencimiento
-                long diasRestantes = LocalDateTime.now().until(prestamo.getFechaDevolucion(), ChronoUnit.DAYS);
+            // Revisar cada préstamo
+            for (Prestamo prestamo : prestamosActivos) {
+                // Obtener los días hasta el vencimiento
+                long diasHastaVencimiento = prestamo.diasHastaVencimiento();
 
-                // Enviar alerta
-                notificacionManager.enviarAlertaVencimiento(prestamo, (int) diasRestantes);
+                // Préstamos ya vencidos
+                if (diasHastaVencimiento < 0) {
+                    notificacionManager.enviarNotificacionVencimiento(prestamo);
+                    continue;
+                }
+
+                // Préstamos que vencen pronto
+                if (diasHastaVencimiento <= 3) {
+                    notificacionManager.enviarNotificacionProximoVencimiento(prestamo, diasHastaVencimiento);
+                }
             }
 
-            // Obtener préstamos vencidos
-            List<Prestamo> prestamosVencidos = sistemaPrestamos.obtenerPrestamosVencidos();
+            // Contar y mostrar estadísticas
+            long vencidos = prestamosActivos.stream()
+                    .filter(Prestamo::estaVencido)
+                    .count();
 
-            for (Prestamo prestamo : prestamosVencidos) {
-                // Enviar alerta de vencimiento (prioridad alta)
-                notificacionManager.enviarAlertaVencimiento(prestamo, 0);
-            }
+            long porVencer = prestamosActivos.stream()
+                    .filter(p -> !p.estaVencido() && p.diasHastaVencimiento() <= 3)
+                    .count();
 
-            if (prestamosPorVencer.isEmpty() && prestamosVencidos.isEmpty()) {
-                System.out.println("No hay préstamos por vencer o vencidos");
-            }
+            System.out.println(
+                    "Revisión finalizada. Préstamos vencidos: " + vencidos + ", Por vencer pronto: " + porVencer);
 
         } catch (Exception e) {
-            System.err.println("Error en la verificación de vencimientos: " + e.getMessage());
+            System.err.println("Error al revisar vencimientos: " + e.getMessage());
+            e.printStackTrace();
+        }
+    }
+
+    public void detener() {
+        if (scheduler != null) {
+            scheduler.shutdown();
+            try {
+                if (!scheduler.awaitTermination(5, TimeUnit.SECONDS)) {
+                    scheduler.shutdownNow();
+                }
+            } catch (InterruptedException e) {
+                scheduler.shutdownNow();
+                Thread.currentThread().interrupt();
+            }
+            System.out.println("Monitor de vencimientos detenido.");
         }
     }
 }

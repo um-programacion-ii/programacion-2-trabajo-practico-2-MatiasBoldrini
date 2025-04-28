@@ -3,40 +3,45 @@ package app.biblioteca.models;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
-/**
- * Clase que representa una reserva de un recurso por un usuario
- */
+import app.biblioteca.interfaces.RecursoDigital;
+
 public class Reserva implements Comparable<Reserva> {
     private String id;
+    private RecursoDigital recurso;
     private Usuario usuario;
-    private String idRecurso;
-    private LocalDateTime fechaSolicitud;
+    private LocalDateTime fechaReserva;
+    private LocalDateTime fechaLimite;
     private boolean activa;
     private int prioridad;
 
-    public Reserva(Usuario usuario, String idRecurso) {
+    public Reserva(RecursoDigital recurso, Usuario usuario, int prioridad) {
         this.id = UUID.randomUUID().toString();
+        this.recurso = recurso;
         this.usuario = usuario;
-        this.idRecurso = idRecurso;
-        this.fechaSolicitud = LocalDateTime.now();
+        this.fechaReserva = LocalDateTime.now();
+        this.fechaLimite = fechaReserva.plusDays(7); // La reserva expira en 7 días
         this.activa = true;
-        this.prioridad = 1; // Prioridad normal por defecto
+        this.prioridad = prioridad;
     }
 
     public String getId() {
         return id;
     }
 
+    public RecursoDigital getRecurso() {
+        return recurso;
+    }
+
     public Usuario getUsuario() {
         return usuario;
     }
 
-    public String getIdRecurso() {
-        return idRecurso;
+    public LocalDateTime getFechaReserva() {
+        return fechaReserva;
     }
 
-    public LocalDateTime getFechaSolicitud() {
-        return fechaSolicitud;
+    public LocalDateTime getFechaLimite() {
+        return fechaLimite;
     }
 
     public boolean isActiva() {
@@ -55,26 +60,26 @@ public class Reserva implements Comparable<Reserva> {
         this.prioridad = prioridad;
     }
 
-    /**
-     * Compara dos reservas para determinar cuál tiene más prioridad.
-     * Se comparan primero por prioridad y luego por fecha de solicitud.
-     */
+    public boolean haExpirado() {
+        return LocalDateTime.now().isAfter(fechaLimite);
+    }
+
     @Override
     public int compareTo(Reserva otra) {
-        // Primero comparamos por prioridad (mayor prioridad primero)
+        // Primero comparamos por prioridad (mayor primero)
         int comparacionPrioridad = Integer.compare(otra.prioridad, this.prioridad);
-
         if (comparacionPrioridad != 0) {
             return comparacionPrioridad;
         }
 
-        // Si la prioridad es igual, comparamos por fecha (más antigua primero)
-        return this.fechaSolicitud.compareTo(otra.fechaSolicitud);
+        // Si tienen la misma prioridad, comparamos por fecha (más antigua primero)
+        return this.fechaReserva.compareTo(otra.fechaReserva);
     }
 
     @Override
     public String toString() {
-        return "Reserva [id=" + id + ", usuario=" + usuario.getNombre() + ", recurso=" + idRecurso +
-                ", fecha=" + fechaSolicitud + ", activa=" + activa + ", prioridad=" + prioridad + "]";
+        return "Reserva [id=" + id + ", recurso=" + recurso.getTitulo() + ", usuario=" + usuario.getNombre()
+                + ", fechaReserva=" + fechaReserva + ", fechaLimite=" + fechaLimite
+                + ", activa=" + activa + ", prioridad=" + prioridad + "]";
     }
 }

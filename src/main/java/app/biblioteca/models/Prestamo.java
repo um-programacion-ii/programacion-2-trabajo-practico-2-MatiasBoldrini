@@ -3,37 +3,35 @@ package app.biblioteca.models;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
-/**
- * Clase que representa un préstamo de un recurso a un usuario
- */
+import app.biblioteca.interfaces.RecursoDigital;
+
 public class Prestamo {
     private String id;
+    private RecursoDigital recurso;
     private Usuario usuario;
-    private String idRecurso;
     private LocalDateTime fechaPrestamo;
     private LocalDateTime fechaDevolucion;
-    private boolean activo;
+    private boolean devuelto;
 
-    public Prestamo(Usuario usuario, String idRecurso) {
+    public Prestamo(RecursoDigital recurso, Usuario usuario, LocalDateTime fechaDevolucion) {
         this.id = UUID.randomUUID().toString();
+        this.recurso = recurso;
         this.usuario = usuario;
-        this.idRecurso = idRecurso;
         this.fechaPrestamo = LocalDateTime.now();
-        // Por defecto, los préstamos son por 14 días
-        this.fechaDevolucion = fechaPrestamo.plusDays(14);
-        this.activo = true;
+        this.fechaDevolucion = fechaDevolucion;
+        this.devuelto = false;
     }
 
     public String getId() {
         return id;
     }
 
-    public Usuario getUsuario() {
-        return usuario;
+    public RecursoDigital getRecurso() {
+        return recurso;
     }
 
-    public String getIdRecurso() {
-        return idRecurso;
+    public Usuario getUsuario() {
+        return usuario;
     }
 
     public LocalDateTime getFechaPrestamo() {
@@ -48,38 +46,37 @@ public class Prestamo {
         this.fechaDevolucion = fechaDevolucion;
     }
 
-    public void finalizarPrestamo() {
-        this.activo = false;
+    public boolean isDevuelto() {
+        return devuelto;
     }
 
-    public boolean isActivo() {
-        return activo;
+    public void marcarComoDevuelto() {
+        this.devuelto = true;
     }
 
-    /**
-     * Verifica si el préstamo está vencido
-     * 
-     * @return true si la fecha actual es posterior a la fecha de devolución
-     */
-    public boolean isVencido() {
-        return LocalDateTime.now().isAfter(fechaDevolucion);
+    public boolean estaVencido() {
+        return !devuelto && LocalDateTime.now().isAfter(fechaDevolucion);
     }
 
-    /**
-     * Renueva el préstamo por un número adicional de días
-     * 
-     * @param dias Días adicionales para el préstamo
-     * @return La nueva fecha de devolución
-     */
-    public LocalDateTime renovar(int dias) {
-        this.fechaDevolucion = fechaDevolucion.plusDays(dias);
-        return this.fechaDevolucion;
+    public long diasHastaVencimiento() {
+        if (devuelto) {
+            return 0;
+        }
+
+        LocalDateTime ahora = LocalDateTime.now();
+        if (ahora.isAfter(fechaDevolucion)) {
+            // Ya está vencido, retorna días negativos
+            return java.time.Duration.between(fechaDevolucion, ahora).toDays() * -1;
+        } else {
+            // Días restantes
+            return java.time.Duration.between(ahora, fechaDevolucion).toDays();
+        }
     }
 
     @Override
     public String toString() {
-        return "Préstamo [id=" + id + ", usuario=" + usuario.getNombre() +
-                ", recurso=" + idRecurso + ", fecha préstamo=" + fechaPrestamo +
-                ", fecha devolución=" + fechaDevolucion + ", activo=" + activo + "]";
+        return "Prestamo [id=" + id + ", recurso=" + recurso.getTitulo() + ", usuario=" + usuario.getNombre()
+                + ", fechaPrestamo=" + fechaPrestamo + ", fechaDevolucion=" + fechaDevolucion + ", devuelto=" + devuelto
+                + "]";
     }
 }

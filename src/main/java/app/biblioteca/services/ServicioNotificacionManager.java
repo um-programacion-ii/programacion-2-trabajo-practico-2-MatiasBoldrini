@@ -1,141 +1,121 @@
 package app.biblioteca.services;
 
-import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.TimeUnit;
 
 import app.biblioteca.interfaces.ServicioNotificaciones;
 import app.biblioteca.models.Prestamo;
 import app.biblioteca.models.Reserva;
 import app.biblioteca.models.Usuario;
 
-/**
- * Gestor central de notificaciones que utiliza diferentes servicios de
- * notificación
- */
 public class ServicioNotificacionManager {
-
     private ServicioNotificaciones servicioNotificaciones;
-    private ExecutorService executorService;
-    private DateTimeFormatter formatter;
+    private LinkedBlockingQueue<NotificacionTask> colaNotificaciones;
+    private ExecutorService procesadorNotificaciones;
+    private volatile boolean ejecutando = true;
 
     public ServicioNotificacionManager(ServicioNotificaciones servicioNotificaciones) {
         this.servicioNotificaciones = servicioNotificaciones;
-        this.executorService = Executors.newFixedThreadPool(2);
-        this.formatter = DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm");
+        this.colaNotificaciones = new LinkedBlockingQueue<>();
+        this.procesadorNotificaciones = Executors.newSingleThreadExecutor();
+        iniciarProcesadorNotificaciones();
     }
 
-    /**
-     * Envía una notificación sobre un préstamo
-     * 
-     * @param prestamo Préstamo sobre el que notificar
-     */
+    private void iniciarProcesadorNotificaciones() {
+        procesadorNotificaciones.submit(() -> {
+            try {
+                while (ejecutando) {
+                    NotificacionTask task = colaNotificaciones.poll(1, TimeUnit.SECONDS);
+                    if (task != null) {
+                        try {
+                            task.ejecutar();
+                        } catch (Exception e) {
+                            System.err.println("Error al enviar notificación: " + e.getMessage());
+                        }
+                    }
+                }
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                System.err.println("Procesador de notificaciones interrumpido: " + e.getMessage());
+            }
+        });
+    }
+
     public void enviarNotificacionPrestamo(Prestamo prestamo) {
-        Usuario usuario = prestamo.getUsuario();
-        String mensaje = "Se ha realizado un préstamo del recurso con ID " + prestamo.getIdRecurso() +
-                ". Fecha de devolución: " + prestamo.getFechaDevolucion().format(formatter);
+        String mensaje = "Se ha realizado un préstamo del recurso '" + prestamo.getRecurso().getTitulo() +
+                "' con fecha de devolución " + prestamo.getFechaDevolucion();
 
-        enviarNotificacion(usuario, mensaje);
+        colaNotificaciones.add(new NotificacionTask(prestamo.getUsuario(), mensaje, false));
     }
 
-    /**
-     * Envía una notificación sobre una devolución
-     * 
-     * @param prestamo Préstamo devuelto
-     */
     public void enviarNotificacionDevolucion(Prestamo prestamo) {
-        Usuario usuario = prestamo.getUsuario();
-        String mensaje = "Se ha registrado la devolución del recurso con ID " + prestamo.getIdRecurso();
+        String mensaje = "Se ha registrado la devolución del recurso '" + prestamo.getRecurso().getTitulo() + "'";
 
-        enviarNotificacion(usuario, mensaje);
+        colaNotificaciones.add(new NotificacionTask(prestamo.getUsuario(), mensaje, false));
     }
 
-    /**
-     * Envía una alerta por vencimiento de préstamo
-     * 
-     * @param prestamo      Préstamo por vencer
-     * @param diasRestantes Días restantes para el vencimiento
-     */
-    public void enviarAlertaVencimiento(Prestamo prestamo, int diasRestantes) {
-        Usuario usuario = prestamo.getUsuario();
-        String asunto = "Alerta de vencimiento de préstamo";
+    public void enviarNotificacionVencimiento(Prestamo prestamo) {
+        String mensaje = "¡ATENCIÓN! El préstamo del recurso '" + prestamo.getRecurso().getTitulo() +
+                "' ha vencido. Por favor, devuélvalo a la brevedad.";
 
-        String mensaje;
-        int prioridad;
+        colaNotificaciones.add(new NotificacionTask(prestamo.getUsuario(), mensaje, true));
+    }
 
-        if (diasRestantes <= 0) {
-            mensaje = "El préstamo del recurso con ID " + prestamo.getIdRecurso() +
-                    " ha vencido hoy. Por favor, devuélvalo a la brevedad.";
-            prioridad = 3; // Alta
-        } else if (diasRestantes == 1) {
-            mensaje = "El préstamo del recurso con ID " + prestamo.getIdRecurso() +
-                    " vence mañana. Fecha de vencimiento: " +
-                    prestamo.getFechaDevolucion().format(formatter);
-            prioridad = 2; // Media
-        } else {
-            mensaje = "El préstamo del recurso con ID " + prestamo.getIdRecurso() +
-                    " vence en " + diasRestantes + " días. Fecha de vencimiento: " +
-                    prestamo.getFechaDevolucion().format(formatter);
-            prioridad = 1; // Baja
+    public void enviarNotificacionProximoVencimiento(Prestamo prestamo, long diasRestantes) {
+        String mensaje = "El préstamo del recurso '" + prestamo.getRecurso().getTitulo() +
+                "' vencerá en " + diasRestantes + " días.";
+
+        colaNotificaciones.add(new NotificacionTask(prestamo.getUsuario(), mensaje, false));
+    }
+
+    public void enviarNotificacionReservaRealizada(Reserva reserva) {
+        String mensaje = "Se ha registrado su reserva para el recurso '" + reserva.getRecurso().getTitulo() +
+                "'. Se le notificará cuando esté disponible.";
+
+        colaNotificaciones.add(new NotificacionTask(reserva.getUsuario(), mensaje, false));
+    }
+
+    public void enviarNotificacionRecursoDisponible(Reserva reserva) {
+        String mensaje = "¡El recurso '" + reserva.getRecurso().getTitulo() +
+                "' que usted reservó ya está disponible! Pase a retirarlo en las próximas 48 horas.";
+
+        colaNotificaciones.add(new NotificacionTask(reserva.getUsuario(), mensaje, true));
+    }
+
+    public void detener() {
+        this.ejecutando = false;
+        procesadorNotificaciones.shutdown();
+        try {
+            if (!procesadorNotificaciones.awaitTermination(5, TimeUnit.SECONDS)) {
+                procesadorNotificaciones.shutdownNow();
+            }
+        } catch (InterruptedException e) {
+            procesadorNotificaciones.shutdownNow();
+            Thread.currentThread().interrupt();
+        }
+    }
+
+    private class NotificacionTask {
+        private Usuario usuario;
+        private String mensaje;
+        private boolean esRecordatorio;
+
+        public NotificacionTask(Usuario usuario, String mensaje, boolean esRecordatorio) {
+            this.usuario = usuario;
+            this.mensaje = mensaje;
+            this.esRecordatorio = esRecordatorio;
         }
 
-        enviarAlerta(usuario, asunto, mensaje, prioridad);
-    }
-
-    /**
-     * Envía una notificación sobre disponibilidad de un recurso reservado
-     * 
-     * @param reserva Reserva cuyo recurso está disponible
-     */
-    public void enviarNotificacionDisponibilidad(Reserva reserva) {
-        Usuario usuario = reserva.getUsuario();
-        String asunto = "Recurso disponible para préstamo";
-        String mensaje = "El recurso con ID " + reserva.getIdRecurso() +
-                " que usted reservó está disponible para préstamo.";
-
-        enviarAlerta(usuario, asunto, mensaje, 2);
-    }
-
-    /**
-     * Envía una notificación genérica a un usuario
-     * 
-     * @param usuario Usuario destinatario
-     * @param mensaje Mensaje a enviar
-     */
-    public void enviarNotificacion(Usuario usuario, String mensaje) {
-        executorService.submit(() -> {
-            if (servicioNotificaciones.isDisponible()) {
+        public void ejecutar() {
+            if (esRecordatorio) {
+                servicioNotificaciones.enviarRecordatorio(usuario, mensaje);
+            } else {
                 servicioNotificaciones.enviarNotificacion(usuario, mensaje);
-            } else {
-                System.err.println("Servicio de notificaciones no disponible. " +
-                        "No se pudo enviar notificación a " + usuario.getNombre());
             }
-        });
-    }
-
-    /**
-     * Envía una alerta a un usuario
-     * 
-     * @param usuario   Usuario destinatario
-     * @param asunto    Asunto de la alerta
-     * @param mensaje   Mensaje de la alerta
-     * @param prioridad Nivel de prioridad (1-3)
-     */
-    public void enviarAlerta(Usuario usuario, String asunto, String mensaje, int prioridad) {
-        executorService.submit(() -> {
-            if (servicioNotificaciones.isDisponible()) {
-                servicioNotificaciones.enviarAlerta(usuario, asunto, mensaje, prioridad);
-            } else {
-                System.err.println("Servicio de notificaciones no disponible. " +
-                        "No se pudo enviar alerta a " + usuario.getNombre());
-            }
-        });
-    }
-
-    /**
-     * Detiene el servicio de notificaciones
-     */
-    public void detener() {
-        executorService.shutdown();
+        }
     }
 }

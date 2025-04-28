@@ -9,85 +9,80 @@ import app.biblioteca.interfaces.RecursoDigital;
 import app.biblioteca.models.EstadoRecurso;
 import app.biblioteca.models.Reserva;
 
-/**
- * Monitor que verifica periódicamente las reservas y notifica cuando los recursos están disponibles
- */
 public class MonitorReservas {
-    
-    private SistemaReservas sistemaReservas;
-    private GestorRecursos gestorRecursos;
-    private ServicioNotificacionManager notificacionManager;
+    private final SistemaReservas sistemaReservas;
+    private final GestorRecursos gestorRecursos;
+    private final ServicioNotificacionManager notificacionManager;
     private ScheduledExecutorService scheduler;
-    private boolean ejecutando;
-    
-    public MonitorReservas(SistemaReservas sistemaReservas, 
-                          GestorRecursos gestorRecursos,
-                          ServicioNotificacionManager notificacionManager) {
+    private static final int PERIODO_REVISION_MINUTOS = 30;
+
+    public MonitorReservas(SistemaReservas sistemaReservas, GestorRecursos gestorRecursos,
+            ServicioNotificacionManager notificacionManager) {
         this.sistemaReservas = sistemaReservas;
         this.gestorRecursos = gestorRecursos;
         this.notificacionManager = notificacionManager;
         this.scheduler = Executors.newScheduledThreadPool(1);
-        this.ejecutando = false;
     }
-    
-    /**
-     * Inicia el monitor de reservas
-     */
+
     public void iniciar() {
-        if (!ejecutando) {
-            ejecutando = true;
-            
-            // Programar la verificación cada 25 segundos (para demostración)
-            // En un sistema real podría ser cada hora
-            scheduler.scheduleAtFixedRate(this::verificarReservas, 10, 25, TimeUnit.SECONDS);
-            
-            System.out.println("Monitor de reservas iniciado");
-        }
+        scheduler.scheduleAtFixedRate(
+                this::procesarReservas,
+                0, // Iniciar inmediatamente
+                PERIODO_REVISION_MINUTOS,
+                TimeUnit.MINUTES);
+
+        System.out.println("Monitor de reservas iniciado. Revisará cada " + PERIODO_REVISION_MINUTOS + " minutos.");
     }
-    
-    /**
-     * Detiene el monitor de reservas
-     */
-    public void detener() {
-        if (ejecutando) {
-            ejecutando = false;
-            scheduler.shutdown();
-            
-            System.out.println("Monitor de reservas detenido");
-        }
-    }
-    
-    /**
-     * Verifica las reservas activas y notifica si los recursos están disponibles
-     */
-    private void verificarReservas() {
+
+    private void procesarReservas() {
         try {
-            System.out.println("\n==== Verificando reservas activas ====");
-            
-            // Obtener todas las reservas activas
-            List<Reserva> reservasActivas = sistemaReservas.obtenerReservasActivas();
-            
-            if (reservasActivas.isEmpty()) {
-                System.out.println("No hay reservas activas");
-                return;
-            }
-            
-            for (Reserva reserva : reservasActivas) {
-                RecursoDigital recurso = gestorRecursos.buscarPorId(reserva.getIdRecurso());
-                
-                if (recurso != null && recurso.getEstado() == EstadoRecurso.DISPONIBLE) {
-                    // El recurso está disponible, notificar al usuario
-                    notificacionManager.enviarNotificacionDisponibilidad(reserva);
-                    
-                    // Marcar el recurso como reservado para que no se preste a otro usuario
+            System.out.println("Procesando reservas...");
+
+            // Primero, limpiar reservas expiradas
+            sistemaReservas.limpiarReservasExpiradas();
+
+            // Luego, procesar recursos que se hayan vuelto disponibles
+            List<RecursoDigital> recursosDisponibles = gestorRecursos.listarRecursosDisponibles();
+
+            for (RecursoDigital recurso : recursosDisponibles) {
+                // Verificar si hay reservas para este recurso
+                Reserva siguienteReserva = sistemaReservas.obtenerSiguienteReserva(recurso.getIdentificador());
+
+                if (siguienteReserva != null) {
+                    // Marcar recurso como reservado
                     recurso.actualizarEstado(EstadoRecurso.RESERVADO);
-                    
-                    System.out.println("Notificación enviada para la reserva: " + reserva.getId());
+
+                    // Notificar al usuario
+                    notificacionManager.enviarNotificacionRecursoDisponible(siguienteReserva);
+
+                    System.out.println("Recurso '" + recurso.getTitulo() + "' notificado a usuario "
+                            + siguienteReserva.getUsuario().getNombre());
                 }
             }
-            
+
+            // Contar y mostrar estadísticas
+            int reservasActivas = sistemaReservas.listarReservasActivas().size();
+
+            System.out.println("Procesamiento finalizado. Reservas activas: " + reservasActivas);
+
         } catch (Exception e) {
-            System.err.println("Error en la verificación de reservas: " + e.getMessage());
+            System.err.println("Error al procesar reservas: " + e.getMessage());
+            e.printStackTrace();
         }
     }
-} 
+
+    public void detener() {
+        if (scheduler != null) {
+            scheduler.shutdown();
+            try {
+                if (!scheduler.awaitTermination(5, TimeUnit.SECONDS)) {
+                    scheduler.shutdownNow();
+                }
+            } catch (InterruptedException e) {
+                scheduler.shutdownNow();
+                Thread.currentThread().interrupt();
+            }
+            System.out.println("Monitor de reservas detenido.");
+        }
+    }
+}
