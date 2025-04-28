@@ -1,16 +1,15 @@
 package app.biblioteca.models;
 
-/**
- * Categorías posibles para los recursos de la biblioteca
- */
 public enum CategoriaRecurso {
     NOVELA,
     CIENCIA_FICCION,
     HISTORIA,
     CIENCIA,
+    TECNOLOGIA,
+    ARTE,
     INFANTIL,
     EDUCACION,
+    REVISTAS,
     BIOGRAFIA,
-    CLASICO,
-    OTRO
+    SIN_CATEGORIA
 }
