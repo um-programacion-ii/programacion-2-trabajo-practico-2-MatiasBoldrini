@@ -1,67 +1,91 @@
 package app.biblioteca.models;
 
+import java.time.LocalDateTime;
+import app.biblioteca.interfaces.Prestable;
 import app.biblioteca.interfaces.Renovable;
 
-/**
- * Clase que representa un libro digital
- */
-public class Libro extends RecursoBase implements Renovable {
+public class Libro extends RecursoBase implements Prestable, Renovable {
+    private String autor;
     private String isbn;
-    private int numeroPaginas;
+    private int numPaginas;
+    private LocalDateTime fechaDevolucion;
+    private Usuario usuarioPrestamo;
     private int renovacionesRealizadas;
-    private final int maximoRenovaciones = 2;
+    private static final int MAX_RENOVACIONES = 2;
 
-    public Libro(String identificador, String titulo, String autor, String isbn, int numeroPaginas) {
-        super(identificador, titulo, autor);
+    public Libro(String identificador, String titulo, String autor, String isbn, int numPaginas) {
+        super(identificador, titulo);
+        this.autor = autor;
         this.isbn = isbn;
-        this.numeroPaginas = numeroPaginas;
+        this.numPaginas = numPaginas;
         this.renovacionesRealizadas = 0;
+    }
+
+    public String getAutor() {
+        return autor;
     }
 
     public String getIsbn() {
         return isbn;
     }
 
-    public int getNumeroPaginas() {
-        return numeroPaginas;
+    public int getNumPaginas() {
+        return numPaginas;
     }
 
     @Override
-    public boolean esRenovable() {
-        return renovacionesRealizadas < maximoRenovaciones;
+    public boolean estaDisponible() {
+        return this.estado == EstadoRecurso.DISPONIBLE;
     }
 
     @Override
-    public int getMaximoRenovaciones() {
-        return maximoRenovaciones;
+    public LocalDateTime getFechaDevolucion() {
+        return fechaDevolucion;
     }
 
     @Override
-    public int getRenovacionesRealizadas() {
-        return renovacionesRealizadas;
-    }
-
-    @Override
-    public void incrementarRenovaciones() {
-        renovacionesRealizadas++;
-    }
-
-    @Override
-    public java.time.LocalDateTime renovar(int diasExtension) {
-        if (esRenovable()) {
-            incrementarRenovaciones();
-            java.time.LocalDateTime nuevaFecha = getFechaDevolucion().plusDays(diasExtension);
-            setFechaDevolucion(nuevaFecha);
-            return nuevaFecha;
+    public void prestar(Usuario usuario) {
+        if (!estaDisponible()) {
+            System.out.println("El libro no está disponible para préstamo");
+            return;
         }
-        return getFechaDevolucion();
+
+        this.usuarioPrestamo = usuario;
+        this.fechaDevolucion = LocalDateTime.now().plusDays(15);
+        this.estado = EstadoRecurso.PRESTADO;
+        this.renovacionesRealizadas = 0;
+        System.out.println("Libro prestado a " + usuario.getNombre() + " hasta " + fechaDevolucion);
     }
 
     @Override
-    public String toString() {
-        return "Libro [id=" + getIdentificador() + ", título=" + getTitulo() +
-                ", autor=" + getAutor() + ", ISBN=" + isbn +
-                ", páginas=" + numeroPaginas + ", estado=" + getEstado() +
-                ", categoría=" + getCategoria() + "]";
+    public void devolver() {
+        if (this.estado != EstadoRecurso.PRESTADO) {
+            System.out.println("Este libro no está prestado");
+            return;
+        }
+
+        this.usuarioPrestamo = null;
+        this.fechaDevolucion = null;
+        this.estado = EstadoRecurso.DISPONIBLE;
+        System.out.println("Libro devuelto correctamente");
+    }
+
+    @Override
+    public boolean puedeRenovarse() {
+        return this.estado == EstadoRecurso.PRESTADO && renovacionesRealizadas < MAX_RENOVACIONES;
+    }
+
+    @Override
+    public LocalDateTime renovar() {
+        if (!puedeRenovarse()) {
+            System.out.println("No se puede renovar este libro");
+            return fechaDevolucion;
+        }
+
+        this.fechaDevolucion = this.fechaDevolucion.plusDays(15);
+        this.renovacionesRealizadas++;
+        System.out.println("Libro renovado hasta " + fechaDevolucion);
+
+        return fechaDevolucion;
     }
 }

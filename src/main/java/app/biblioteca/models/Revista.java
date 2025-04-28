@@ -1,41 +1,67 @@
 package app.biblioteca.models;
 
 import java.time.LocalDateTime;
+import app.biblioteca.interfaces.Prestable;
 
-/**
- * Clase que representa una revista digital
- */
-public class Revista extends RecursoBase {
+public class Revista extends RecursoBase implements Prestable {
+    private String editorial;
     private String issn;
-    private int numeroEdicion;
+    private int numero;
+    private LocalDateTime fechaDevolucion;
+    private Usuario usuarioPrestamo;
 
-    public Revista(String identificador, String titulo, String autor, String issn, int numeroEdicion) {
-        super(identificador, titulo, autor);
+    public Revista(String identificador, String titulo, String editorial, String issn, int numero) {
+        super(identificador, titulo);
+        this.editorial = editorial;
         this.issn = issn;
-        this.numeroEdicion = numeroEdicion;
+        this.numero = numero;
+    }
+
+    public String getEditorial() {
+        return editorial;
     }
 
     public String getIssn() {
         return issn;
     }
 
-    public int getNumeroEdicion() {
-        return numeroEdicion;
+    public int getNumero() {
+        return numero;
+    }
+
+    @Override
+    public boolean estaDisponible() {
+        return this.estado == EstadoRecurso.DISPONIBLE;
+    }
+
+    @Override
+    public LocalDateTime getFechaDevolucion() {
+        return fechaDevolucion;
     }
 
     @Override
     public void prestar(Usuario usuario) {
-        super.prestar(usuario);
-        // Las revistas se prestan por menos tiempo: 7 días
-        LocalDateTime fechaDevolucion = LocalDateTime.now().plusDays(7);
-        setFechaDevolucion(fechaDevolucion);
+        if (!estaDisponible()) {
+            System.out.println("La revista no está disponible para préstamo");
+            return;
+        }
+
+        this.usuarioPrestamo = usuario;
+        this.fechaDevolucion = LocalDateTime.now().plusDays(7); // Las revistas tienen menor tiempo de préstamo
+        this.estado = EstadoRecurso.PRESTADO;
+        System.out.println("Revista prestada a " + usuario.getNombre() + " hasta " + fechaDevolucion);
     }
 
     @Override
-    public String toString() {
-        return "Revista [id=" + getIdentificador() + ", título=" + getTitulo() +
-                ", editor=" + getAutor() + ", ISSN=" + issn +
-                ", edición=" + numeroEdicion + ", estado=" + getEstado() +
-                ", categoría=" + getCategoria() + "]";
+    public void devolver() {
+        if (this.estado != EstadoRecurso.PRESTADO) {
+            System.out.println("Esta revista no está prestada");
+            return;
+        }
+
+        this.usuarioPrestamo = null;
+        this.fechaDevolucion = null;
+        this.estado = EstadoRecurso.DISPONIBLE;
+        System.out.println("Revista devuelta correctamente");
     }
 }

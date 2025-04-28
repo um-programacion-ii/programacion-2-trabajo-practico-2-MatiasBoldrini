@@ -1,44 +1,37 @@
 package app.biblioteca.services;
 
+import java.util.HashMap;
+import java.util.Map;
+import java.util.UUID;
+
 import app.biblioteca.interfaces.ServicioNotificaciones;
 import app.biblioteca.models.Usuario;
 
-/**
- * Implementación del servicio de notificaciones por email
- */
 public class ServicioNotificacionesEmail implements ServicioNotificaciones {
+    private Map<String, Boolean> notificacionesEnviadas;
+
+    public ServicioNotificacionesEmail() {
+        this.notificacionesEnviadas = new HashMap<>();
+    }
 
     @Override
     public void enviarNotificacion(Usuario usuario, String mensaje) {
-        System.out.println("[EMAIL] Enviando notificación a " + usuario.getNombre() +
-                " (" + usuario.getEmail() + "): " + mensaje);
+        // Simulación de envío de correo electrónico
+        String idNotificacion = UUID.randomUUID().toString();
+        System.out.println("Enviando email a " + usuario.getEmail() + ": " + mensaje);
+        notificacionesEnviadas.put(idNotificacion, true);
     }
 
     @Override
-    public void enviarAlerta(Usuario usuario, String asunto, String mensaje, int prioridad) {
-        String nivelPrioridad = "";
-
-        switch (prioridad) {
-            case 1:
-                nivelPrioridad = "BAJA";
-                break;
-            case 2:
-                nivelPrioridad = "MEDIA";
-                break;
-            case 3:
-                nivelPrioridad = "ALTA";
-                break;
-            default:
-                nivelPrioridad = "INFORMATIVA";
-        }
-
-        System.out.println("[EMAIL-ALERTA " + nivelPrioridad + "] " + asunto + " - Para: " +
-                usuario.getNombre() + " (" + usuario.getEmail() + "): " + mensaje);
+    public void enviarRecordatorio(Usuario usuario, String mensaje) {
+        // Simulación de envío de correo de recordatorio
+        String idNotificacion = UUID.randomUUID().toString();
+        System.out.println("RECORDATORIO por email a " + usuario.getEmail() + ": " + mensaje);
+        notificacionesEnviadas.put(idNotificacion, true);
     }
 
     @Override
-    public boolean isDisponible() {
-        // Simulamos que el servicio está disponible
-        return true;
+    public boolean notificacionEnviada(String idNotificacion) {
+        return notificacionesEnviadas.getOrDefault(idNotificacion, false);
     }
 }

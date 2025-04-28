@@ -1,38 +1,37 @@
 package app.biblioteca.services;
 
+import java.util.HashMap;
+import java.util.Map;
+import java.util.UUID;
+
 import app.biblioteca.interfaces.ServicioNotificaciones;
 import app.biblioteca.models.Usuario;
 
-/**
- * Implementación del servicio de notificaciones por SMS
- */
 public class ServicioNotificacionesSMS implements ServicioNotificaciones {
+    private Map<String, Boolean> notificacionesEnviadas;
+
+    public ServicioNotificacionesSMS() {
+        this.notificacionesEnviadas = new HashMap<>();
+    }
 
     @Override
     public void enviarNotificacion(Usuario usuario, String mensaje) {
-        // Simulamos envío de SMS
-        System.out.println("[SMS] Enviando mensaje a " + usuario.getNombre() + ": " + mensaje);
-
-        // Error intencionado en el método que no afecta el funcionamiento general
-        try {
-            String test = null;
-            // Esta línea de código está comentada para evitar que realmente lance la
-            // excepción
-            // int length = test.length();
-        } catch (Exception e) {
-            // Intencionalmente vacío como ejemplo de error humano
-        }
+        // Simulación de envío de SMS
+        String idNotificacion = UUID.randomUUID().toString();
+        System.out.println("Enviando SMS a " + usuario.getNombre() + ": " + mensaje);
+        notificacionesEnviadas.put(idNotificacion, true);
     }
 
     @Override
-    public void enviarAlerta(Usuario usuario, String asunto, String mensaje, int prioridad) {
-        System.out.println("[SMS-URGENTE] " + asunto + " - Para: " + usuario.getNombre() + ": " + mensaje);
+    public void enviarRecordatorio(Usuario usuario, String mensaje) {
+        // Simulación de envío de SMS de recordatorio
+        String idNotificacion = UUID.randomUUID().toString();
+        System.out.println("RECORDATORIO por SMS a " + usuario.getNombre() + ": " + mensaje);
+        notificacionesEnviadas.put(idNotificacion, true);
     }
 
     @Override
-    public boolean isDisponible() {
-        // Simulamos que el servicio SMS puede fallar a veces
-        double random = Math.random();
-        return random > 0.2; // 80% de disponibilidad
+    public boolean notificacionEnviada(String idNotificacion) {
+        return notificacionesEnviadas.getOrDefault(idNotificacion, false);
     }
 }
